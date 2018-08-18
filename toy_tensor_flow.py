@@ -41,6 +41,22 @@ class MatMul(Operation):
         return x.dot(y)
 
 
+class Sigmoid(Operation):
+    def __init__(self, x):
+        super().__init__([x])
+
+    def compute(self, x):
+        return 1 / (1 + np.exp(-x))
+
+
+class Softmax(Operation):
+    def __init__(self, x):
+        super().__init__([x])
+
+    def compute(self, x):
+        return np.exp(x) / np.sum(np.exp(x), axis=1)[:, None]
+
+
 class Session:
     def run(self, target, feed_dict):
         nodes_sorted = topological_sort(target)
@@ -67,11 +83,12 @@ def topological_sort(node):
     return sorted_nodes[::-1]
 
 
-a = np.ones((2, 3))
-b = np.ones((3, 1))
+a = np.random.rand(2, 7)
+b = np.random.rand(7, 6)
 
 x = Placeholder()
 y = Placeholder()
 z = MatMul(x, y)
+p = Softmax(z)
 session = Session()
-print(session.run(z, {x: a, y: b}))
+print(session.run(p, {x: a, y: b}))
