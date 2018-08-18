@@ -41,6 +41,39 @@ class MatMul(Operation):
         return x.dot(y)
 
 
+class Log(Operation):
+    def __init__(self, x):
+        super().__init__([x])
+
+    def compute(self, x):
+        return np.log(x)
+
+
+class HadamardProduct(Operation):
+    def __init__(self, x, y):
+        super().__init__([x, y])
+
+    def compute(self, x, y):
+        return x * y
+
+
+class Negative(Operation):
+    def __init__(self, x):
+        return super().__init__([x])
+
+    def compute(self, x):
+        return -x
+
+
+class ReduceSum(Operation):
+    def __init__(self, x, axis=None):
+        self.axis = axis
+        return super().__init__([x])
+
+    def compute(self, x):
+        return np.sum(x, self.axis)
+
+
 class Sigmoid(Operation):
     def __init__(self, x):
         super().__init__([x])
@@ -83,12 +116,16 @@ def topological_sort(node):
     return sorted_nodes[::-1]
 
 
-a = np.random.rand(2, 7)
-b = np.random.rand(7, 6)
+def cross_entropy_loss(labels, predictions):
+    return Negative(ReduceSum(HadamardProduct(labels, Log(predictions))))
+
+
+a = np.array([[1, 2, 3, 4, 5, 6, 7, 10]])
+b = np.array([[0, 0, 0, 0, 0, 0, 0, 1]])
 
 x = Placeholder()
 y = Placeholder()
-z = MatMul(x, y)
-p = Softmax(z)
+z = Softmax(x)
+loss = cross_entropy_loss(y, z)
 session = Session()
-print(session.run(p, {x: a, y: b}))
+print(session.run(loss, {x: a, y: b}))
