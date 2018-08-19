@@ -1,4 +1,6 @@
 import numpy as np
+from sklearn.datasets import *
+import matplotlib.pyplot as plt
 
 
 class Node:
@@ -125,11 +127,23 @@ class Sigmoid(Operation):
         return 1 / (1 + np.exp(-x))
 
     def compute(self, x):
-        return sigmoid(x)
+        return Sigmoid.sigmoid(x)
 
     def get_gradient(self, gradient_to_this):
         value = self.inputs[0].value
-        return [gradient_to_this * sigmoid(value) * (1 - sigmoid(value))]
+        return [gradient_to_this * Sigmoid.sigmoid(value) * (1 - Sigmoid.sigmoid(value))]
+
+
+class Tanh(Operation):
+    def __init__(self, x):
+        super().__init__([x])
+
+    def compute(self, x):
+        return np.tanh(x)
+
+    def get_gradient(self, gradient_to_this):
+        value = self.value
+        return [gradient_to_this * (1 - np.tanh(value) * np.tanh(value))]
 
 
 class Softmax(Operation):
@@ -207,23 +221,41 @@ def cross_entropy_loss(labels, predictions):
     return Negative(ReduceSum(HadamardProduct(labels, Log(predictions))))
 
 
-data_0 = np.stack([np.array([+2 * np.random.rand(), +2 * np.random.rand()]) for _ in range(32)])
-data_1 = np.stack([np.array([-2 * np.random.rand(), -2 * np.random.rand()]) for _ in range(32)])
-data_x = np.vstack((data_0, data_1))
-data_y = np.array([[1, 0]] * 32 + [[0, 1]] * 32)
+if __name__ == '__main__':
+    data_x, data_y = make_circles(512, noise=0.1, factor=0.5)
+    x_max, x_min = data_x[:, 0].max(), data_x[:, 0].min()
+    y_max, y_min = data_x[:, 1].max(), data_x[:, 1].min()
 
-inputs = Placeholder()
-labels = Placeholder()
-weights = Variable(np.random.rand(2, 2))
-bias = Variable(np.random.rand(2))
-logits = Add(MatMul(inputs, weights), bias)
-predictions = Softmax(logits)
-loss = cross_entropy_loss(labels, predictions)
-minimization = GradientDescentOptimizer(learning_rate=0.01).minimize(loss)
-session = Session()
-print(session.run(loss, feed_dict={inputs: data_x, labels: data_y}))
-for epoch in range(128):
-    session.run(minimization, feed_dict={inputs: data_x, labels: data_y})
-    print(session.run(loss, feed_dict={inputs: data_x, labels: data_y}))
-print(session.run(weights, feed_dict={inputs: data_x, labels: data_y}))
-print(session.run(bias, feed_dict={inputs: data_x, labels: data_y}))
+    data_y_one_hot = np.zeros((512, 2))
+    data_y_one_hot[range(512), data_y] = 1
+
+    inputs = Placeholder()
+    labels = Placeholder()
+    dense_1 = Tanh(Add(MatMul(inputs, Variable(np.random.rand(2, 16))), Variable(np.random.rand(16))))
+    dense_2 = Tanh(Add(MatMul(dense_1, Variable(np.random.rand(16, 16))), Variable(np.random.rand(16))))
+    logits = Add(MatMul(dense_2, Variable(np.random.rand(16, 2))), Variable(np.random.rand(2)))
+    predictions = Softmax(logits)
+    loss = cross_entropy_loss(labels, predictions)
+    minimization = GradientDescentOptimizer(learning_rate=0.0005).minimize(loss)
+    session = Session()
+    print(session.run(loss, feed_dict={inputs: data_x, labels: data_y_one_hot}))
+
+    def get_result(x, y):
+        data = np.array([[x, y]])
+        result = session.run(predictions, feed_dict={inputs: data})
+        return result[0][1]
+
+    for epoch in range(2048):
+        session.run(loss, feed_dict={inputs: data_x, labels: data_y_one_hot})
+        session.run(minimization, feed_dict={inputs: data_x, labels: data_y_one_hot})
+        if epoch % 64 == 0:
+            print(session.run(loss, feed_dict={inputs: data_x, labels: data_y_one_hot}))
+            xs = np.linspace(x_min * 1.1, x_max * 1.1)
+            ys = np.linspace(y_min * 1.1, y_max * 1.1)
+            xs_mesh, ys_mesh = np.meshgrid(xs, ys)
+            plt.contourf(
+                xs_mesh, ys_mesh, np.array([[get_result(x, y) for x in xs] for y in ys]), vmin=0, vmax=1, alpha=0.3
+            )
+            plt.scatter(data_x[:, 0], data_x[:, 1], c=data_y)
+            plt.savefig(f'./circle/{epoch}.png')
+            plt.close()
